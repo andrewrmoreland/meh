@@ -7,8 +7,9 @@ cd "$(dirname "$0")"
 # Build the WASM binary
 GOOS=js GOARCH=wasm go build -o wasm/main.wasm ./wasm
 
-# Copy the Go WASM support file
-cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" wasm/
+# Copy the Go WASM support file (location varies by Go version)
+WASM_EXEC=$(find "$(go env GOROOT)" -name "wasm_exec.js" 2>/dev/null | head -1)
+cp "$WASM_EXEC" wasm/
 
 echo "Build complete!"
 echo ""
