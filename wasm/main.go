@@ -23,10 +23,10 @@ func main() {
 }
 
 // processImage is called from JavaScript with image data and options
-// Args: imageData (Uint8Array), width (int), height (int), trim (bool), format (string)
+// Args: imageData (Uint8Array), width (int), height (int), trim (bool), format (string), quality (int)
 // Returns: processed image as Uint8Array
 func processImage(this js.Value, args []js.Value) interface{} {
-	if len(args) < 5 {
+	if len(args) < 6 {
 		return map[string]interface{}{"error": "missing arguments"}
 	}
 
@@ -40,6 +40,10 @@ func processImage(this js.Value, args []js.Value) interface{} {
 	height := args[2].Int()
 	trim := args[3].Bool()
 	format := args[4].String()
+	quality := args[5].Int()
+	if quality <= 0 || quality > 100 {
+		quality = 90
+	}
 
 	// Decode the image
 	img, _, err := image.Decode(bytes.NewReader(imageData))
@@ -80,10 +84,23 @@ func processImage(this js.Value, args []js.Value) interface{} {
 
 	switch format {
 	case "jpeg":
-		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 90})
+		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: quality})
 		mimeType = "image/jpeg"
 	default:
-		err = png.Encode(&buf, dst)
+		// Map quality to PNG compression level (inverted: 1-25 = BestCompression, 76-100 = NoCompression)
+		// This makes "higher = faster/larger" consistent with JPEG's "higher = better/larger"
+		var compression png.CompressionLevel
+		if quality <= 25 {
+			compression = png.BestCompression
+		} else if quality <= 50 {
+			compression = png.DefaultCompression
+		} else if quality <= 75 {
+			compression = png.BestSpeed
+		} else {
+			compression = png.NoCompression
+		}
+		encoder := &png.Encoder{CompressionLevel: compression}
+		err = encoder.Encode(&buf, dst)
 		mimeType = "image/png"
 	}
 
@@ -101,6 +118,7 @@ func processImage(this js.Value, args []js.Value) interface{} {
 		"mimeType": mimeType,
 		"width":    newWidth,
 		"height":   newHeight,
+		"size":     len(result),
 	}
 }
 

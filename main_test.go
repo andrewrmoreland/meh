@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"image/jpeg"
+	"image/png"
 	"testing"
+
+	"golang.org/x/image/draw"
 )
 
 func TestColorsEqual(t *testing.T) {
@@ -128,5 +133,148 @@ func TestTrimImage_AllSameColor(t *testing.T) {
 	// Current implementation returns original if nothing found
 	if bounds.Dx() != 5 || bounds.Dy() != 5 {
 		t.Errorf("expected 5x5 (no content to keep), got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
+
+// createTestImage creates a test image with gradient colors
+func createTestImage(width, height int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				uint8(x * 255 / width),
+				uint8(y * 255 / height),
+				128,
+				255,
+			})
+		}
+	}
+	return img
+}
+
+func TestJPEGQuality_AffectsFileSize(t *testing.T) {
+	img := createTestImage(100, 100)
+
+	// Encode at low quality
+	var lowQualityBuf bytes.Buffer
+	jpeg.Encode(&lowQualityBuf, img, &jpeg.Options{Quality: 10})
+
+	// Encode at high quality
+	var highQualityBuf bytes.Buffer
+	jpeg.Encode(&highQualityBuf, img, &jpeg.Options{Quality: 95})
+
+	lowSize := lowQualityBuf.Len()
+	highSize := highQualityBuf.Len()
+
+	if highSize <= lowSize {
+		t.Errorf("expected high quality (%d bytes) > low quality (%d bytes)", highSize, lowSize)
+	}
+}
+
+func TestPNGCompression_AffectsFileSize(t *testing.T) {
+	img := createTestImage(100, 100)
+
+	// Encode with no compression
+	var noCompressBuf bytes.Buffer
+	noCompressEncoder := &png.Encoder{CompressionLevel: png.NoCompression}
+	noCompressEncoder.Encode(&noCompressBuf, img)
+
+	// Encode with best compression
+	var bestCompressBuf bytes.Buffer
+	bestCompressEncoder := &png.Encoder{CompressionLevel: png.BestCompression}
+	bestCompressEncoder.Encode(&bestCompressBuf, img)
+
+	noCompressSize := noCompressBuf.Len()
+	bestCompressSize := bestCompressBuf.Len()
+
+	if bestCompressSize >= noCompressSize {
+		t.Errorf("expected best compression (%d bytes) < no compression (%d bytes)", bestCompressSize, noCompressSize)
+	}
+}
+
+func TestResize_MaintainsAspectRatio(t *testing.T) {
+	// Create 200x100 image (2:1 aspect ratio)
+	src := createTestImage(200, 100)
+
+	// Resize to width 100, height should be 50
+	dst := image.NewRGBA(image.Rect(0, 0, 100, 50))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+
+	bounds := dst.Bounds()
+	if bounds.Dx() != 100 || bounds.Dy() != 50 {
+		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
+
+func TestResize_Upscale(t *testing.T) {
+	// Create small image
+	src := createTestImage(50, 50)
+
+	// Upscale to 200x200
+	dst := image.NewRGBA(image.Rect(0, 0, 200, 200))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+
+	bounds := dst.Bounds()
+	if bounds.Dx() != 200 || bounds.Dy() != 200 {
+		t.Errorf("expected 200x200, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+
+	// Verify it's not empty (check a pixel)
+	r, g, b, a := dst.At(100, 100).RGBA()
+	if a == 0 {
+		t.Error("expected non-transparent pixel in upscaled image")
+	}
+	if r == 0 && g == 0 && b == 0 {
+		t.Error("expected non-black pixel in upscaled image")
+	}
+}
+
+func TestTrimImage_AsymmetricBorder(t *testing.T) {
+	// Create image with different border sizes on each side
+	img := image.NewRGBA(image.Rect(0, 0, 20, 15))
+
+	// Fill with white
+	for y := 0; y < 15; y++ {
+		for x := 0; x < 20; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	// Content at (5,2) to (15,12) - 10x10 content
+	// Left border: 5, Right border: 5, Top border: 2, Bottom border: 3
+	green := color.RGBA{0, 255, 0, 255}
+	for y := 2; y < 12; y++ {
+		for x := 5; x < 15; x++ {
+			img.Set(x, y, green)
+		}
+	}
+
+	result := trimImage(img)
+	bounds := result.Bounds()
+
+	if bounds.Dx() != 10 || bounds.Dy() != 10 {
+		t.Errorf("expected 10x10, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
+
+func TestTrimImage_SinglePixelContent(t *testing.T) {
+	// Create image with single non-background pixel
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+
+	// Fill with white
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	// Single red pixel at (5,5)
+	img.Set(5, 5, color.RGBA{255, 0, 0, 255})
+
+	result := trimImage(img)
+	bounds := result.Bounds()
+
+	if bounds.Dx() != 1 || bounds.Dy() != 1 {
+		t.Errorf("expected 1x1, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
 }
