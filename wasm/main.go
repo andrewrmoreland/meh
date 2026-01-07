@@ -87,16 +87,17 @@ func processImage(this js.Value, args []js.Value) interface{} {
 		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: quality})
 		mimeType = "image/jpeg"
 	default:
-		// Map quality to PNG compression level (1-100 -> NoCompression to BestCompression)
+		// Map quality to PNG compression level (inverted: 1-25 = BestCompression, 76-100 = NoCompression)
+		// This makes "higher = faster/larger" consistent with JPEG's "higher = better/larger"
 		var compression png.CompressionLevel
 		if quality <= 25 {
-			compression = png.NoCompression
-		} else if quality <= 50 {
-			compression = png.BestSpeed
-		} else if quality <= 75 {
-			compression = png.DefaultCompression
-		} else {
 			compression = png.BestCompression
+		} else if quality <= 50 {
+			compression = png.DefaultCompression
+		} else if quality <= 75 {
+			compression = png.BestSpeed
+		} else {
+			compression = png.NoCompression
 		}
 		encoder := &png.Encoder{CompressionLevel: compression}
 		err = encoder.Encode(&buf, dst)
