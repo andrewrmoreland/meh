@@ -10,8 +10,6 @@
         #result img { max-width: 100%; border: 1px solid #ccc; }
         .error { color: red; }
         button:disabled { opacity: 0.5; }
-        .quality-row { display: none; }
-        .quality-row.show { display: block; }
         .size-info { background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; }
     </style>
 </head>
@@ -38,9 +36,10 @@
                 </select>
             </label>
         </p>
-        <p class="quality-row" id="qualityRow">
-            <label>Quality: <input type="range" id="quality" min="1" max="100" value="90">
-            <span id="qualityValue">90</span>%</label>
+        <p id="qualityRow">
+            <label><span id="qualityLabel">Quality</span>: <input type="range" id="quality" min="1" max="100" value="90">
+            <span id="qualityValue">90</span><span id="qualityUnit">%</span></label>
+            <br><small id="qualityHint">Higher = better quality, larger file</small>
         </p>
         <p>
             <label><input type="checkbox" id="trim"> Trim borders (transparent or solid color)</label>
@@ -78,15 +77,23 @@
                     '<span class="error">Failed to load WASM: ' + err.message + '</span>';
             });
 
-        // Show/hide quality slider based on format
-        document.getElementById("format").addEventListener("change", (e) => {
-            const qualityRow = document.getElementById("qualityRow");
-            if (e.target.value === "jpeg") {
-                qualityRow.classList.add("show");
+        // Update quality label based on format
+        function updateQualityLabel() {
+            const format = document.getElementById("format").value;
+            const label = document.getElementById("qualityLabel");
+            const hint = document.getElementById("qualityHint");
+
+            if (format === "jpeg") {
+                label.textContent = "Quality";
+                hint.textContent = "Higher = better quality, larger file";
             } else {
-                qualityRow.classList.remove("show");
+                label.textContent = "Compression";
+                hint.textContent = "Higher = more compression, smaller file (slower)";
             }
-        });
+        }
+
+        document.getElementById("format").addEventListener("change", updateQualityLabel);
+        updateQualityLabel();
 
         // Update quality value display
         document.getElementById("quality").addEventListener("input", (e) => {
