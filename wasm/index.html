@@ -10,6 +10,9 @@
         #result img { max-width: 100%; border: 1px solid #ccc; }
         .error { color: red; }
         button:disabled { opacity: 0.5; }
+        .quality-row { display: none; }
+        .quality-row.show { display: block; }
+        .size-info { background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; }
     </style>
 </head>
 <body>
@@ -19,6 +22,7 @@
     <form id="form">
         <p>
             <label>Image: <input type="file" id="image" accept="image/*" required></label>
+            <span id="inputSize"></span>
         </p>
         <p>
             <label>Width: <input type="number" id="width" placeholder="e.g. 200"></label>
@@ -33,6 +37,10 @@
                     <option value="jpeg">JPEG</option>
                 </select>
             </label>
+        </p>
+        <p class="quality-row" id="qualityRow">
+            <label>Quality: <input type="range" id="quality" min="1" max="100" value="90">
+            <span id="qualityValue">90</span>%</label>
         </p>
         <p>
             <label><input type="checkbox" id="trim"> Trim borders (transparent or solid color)</label>
@@ -51,6 +59,13 @@
         const go = new Go();
         let wasmReady = false;
 
+        // Format file size for display
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
         WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
             .then((result) => {
                 go.run(result.instance);
@@ -62,6 +77,29 @@
                 document.getElementById("status").innerHTML =
                     '<span class="error">Failed to load WASM: ' + err.message + '</span>';
             });
+
+        // Show/hide quality slider based on format
+        document.getElementById("format").addEventListener("change", (e) => {
+            const qualityRow = document.getElementById("qualityRow");
+            if (e.target.value === "jpeg") {
+                qualityRow.classList.add("show");
+            } else {
+                qualityRow.classList.remove("show");
+            }
+        });
+
+        // Update quality value display
+        document.getElementById("quality").addEventListener("input", (e) => {
+            document.getElementById("qualityValue").textContent = e.target.value;
+        });
+
+        // Show input file size
+        document.getElementById("image").addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById("inputSize").textContent = `(${formatSize(file.size)})`;
+            }
+        });
 
         document.getElementById("form").addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -91,9 +129,10 @@
                 const height = parseInt(document.getElementById("height").value) || 0;
                 const trim = document.getElementById("trim").checked;
                 const format = document.getElementById("format").value;
+                const quality = parseInt(document.getElementById("quality").value) || 90;
 
                 // Call WASM function
-                const result = processImage(uint8Array, width, height, trim, format);
+                const result = processImage(uint8Array, width, height, trim, format, quality);
 
                 if (result.error) {
                     throw new Error(result.error);
@@ -104,8 +143,14 @@
                 const url = URL.createObjectURL(blob);
 
                 const ext = format === "jpeg" ? "jpg" : "png";
+                const savings = file.size > result.size
+                    ? `<span style="color: green">(-${formatSize(file.size - result.size)})</span>`
+                    : `<span style="color: orange">(+${formatSize(result.size - file.size)})</span>`;
+
                 document.getElementById("result").innerHTML = `
-                    <h3>Result (${result.width} x ${result.height})</h3>
+                    <div class="size-info">
+                        <strong>Output:</strong> ${result.width} x ${result.height} &bull; ${formatSize(result.size)} ${savings}
+                    </div>
                     <img src="${url}" alt="Resized image">
                     <p><a href="${url}" download="resized.${ext}">Download</a></p>
                 `;
