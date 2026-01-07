@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Resizer (WASM)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        input, select, button { margin: 5px 0; }
+        #status { color: #666; margin: 10px 0; }
+        #result { margin-top: 20px; }
+        #result img { max-width: 100%; border: 1px solid #ccc; }
+        .error { color: red; }
+        button:disabled { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <h1>Image Resizer</h1>
+    <p id="status">Loading WASM...</p>
+
+    <form id="form">
+        <p>
+            <label>Image: <input type="file" id="image" accept="image/*" required></label>
+        </p>
+        <p>
+            <label>Width: <input type="number" id="width" placeholder="e.g. 200"></label>
+        </p>
+        <p>
+            <label>Height: <input type="number" id="height" placeholder="e.g. 200"></label>
+        </p>
+        <p>
+            <label>Output format:
+                <select id="format">
+                    <option value="png">PNG</option>
+                    <option value="jpeg">JPEG</option>
+                </select>
+            </label>
+        </p>
+        <p>
+            <label><input type="checkbox" id="trim"> Trim borders (transparent or solid color)</label>
+        </p>
+        <p>
+            <button type="submit" id="submit" disabled>Resize</button>
+        </p>
+    </form>
+    <p><small>Supports PNG, JPEG, and WebP input. Leave width or height empty to maintain aspect ratio.</small></p>
+    <p><small>All processing happens in your browser - no server upload.</small></p>
+
+    <div id="result"></div>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        let wasmReady = false;
+
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then((result) => {
+                go.run(result.instance);
+                wasmReady = true;
+                document.getElementById("status").textContent = "Ready";
+                document.getElementById("submit").disabled = false;
+            })
+            .catch((err) => {
+                document.getElementById("status").innerHTML =
+                    '<span class="error">Failed to load WASM: ' + err.message + '</span>';
+            });
+
+        document.getElementById("form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            if (!wasmReady) {
+                alert("WASM not loaded yet");
+                return;
+            }
+
+            const fileInput = document.getElementById("image");
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Please select an image");
+                return;
+            }
+
+            const status = document.getElementById("status");
+            status.textContent = "Processing...";
+
+            try {
+                // Read file as ArrayBuffer
+                const arrayBuffer = await file.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+
+                // Get options
+                const width = parseInt(document.getElementById("width").value) || 0;
+                const height = parseInt(document.getElementById("height").value) || 0;
+                const trim = document.getElementById("trim").checked;
+                const format = document.getElementById("format").value;
+
+                // Call WASM function
+                const result = processImage(uint8Array, width, height, trim, format);
+
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+
+                // Create blob and display result
+                const blob = new Blob([result.data], { type: result.mimeType });
+                const url = URL.createObjectURL(blob);
+
+                const ext = format === "jpeg" ? "jpg" : "png";
+                document.getElementById("result").innerHTML = `
+                    <h3>Result (${result.width} x ${result.height})</h3>
+                    <img src="${url}" alt="Resized image">
+                    <p><a href="${url}" download="resized.${ext}">Download</a></p>
+                `;
+
+                status.textContent = "Done!";
+            } catch (err) {
+                status.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+                document.getElementById("result").innerHTML = '';
+            }
+        });
+    </script>
+</body>
+</html>
