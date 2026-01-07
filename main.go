@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"log"
 	"net/http"
 	"strconv"
 
-	_ "golang.org/x/image/webp"
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 func main() {
@@ -46,6 +47,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
                     <option value="jpeg">JPEG</option>
                 </select>
             </label>
+        </p>
+        <p>
+            <label><input type="checkbox" name="trim" value="1"> Trim borders (transparent or solid color)</label>
         </p>
         <p>
             <button type="submit">Resize</button>
@@ -84,6 +88,11 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to decode image: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// Apply trim if requested
+	if r.FormValue("trim") == "1" {
+		img = trimImage(img)
 	}
 
 	// Get dimensions
@@ -129,4 +138,108 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", "attachment; filename=resized.png")
 		png.Encode(w, dst)
 	}
+}
+
+// trimImage removes transparent borders (if image has transparency) or solid color borders
+// (using top-left pixel as reference). Returns the cropped subimage.
+func trimImage(img image.Image) image.Image {
+	bounds := img.Bounds()
+	minX, minY := bounds.Min.X, bounds.Min.Y
+	maxX, maxY := bounds.Max.X, bounds.Max.Y
+
+	// Check if image has transparency by sampling top-left pixel
+	topLeft := img.At(minX, minY)
+	_, _, _, a := topLeft.RGBA()
+	hasTransparency := a < 0xffff
+
+	// Determine if a pixel should be trimmed
+	shouldTrim := func(x, y int) bool {
+		c := img.At(x, y)
+		if hasTransparency {
+			_, _, _, alpha := c.RGBA()
+			return alpha == 0
+		}
+		return colorsEqual(c, topLeft)
+	}
+
+	// Find top edge
+	top := minY
+	for y := minY; y < maxY; y++ {
+		found := false
+		for x := minX; x < maxX; x++ {
+			if !shouldTrim(x, y) {
+				found = true
+				break
+			}
+		}
+		if found {
+			top = y
+			break
+		}
+	}
+
+	// Find bottom edge
+	bottom := maxY
+	for y := maxY - 1; y >= top; y-- {
+		found := false
+		for x := minX; x < maxX; x++ {
+			if !shouldTrim(x, y) {
+				found = true
+				break
+			}
+		}
+		if found {
+			bottom = y + 1
+			break
+		}
+	}
+
+	// Find left edge
+	left := minX
+	for x := minX; x < maxX; x++ {
+		found := false
+		for y := top; y < bottom; y++ {
+			if !shouldTrim(x, y) {
+				found = true
+				break
+			}
+		}
+		if found {
+			left = x
+			break
+		}
+	}
+
+	// Find right edge
+	right := maxX
+	for x := maxX - 1; x >= left; x-- {
+		found := false
+		for y := top; y < bottom; y++ {
+			if !shouldTrim(x, y) {
+				found = true
+				break
+			}
+		}
+		if found {
+			right = x + 1
+			break
+		}
+	}
+
+	// If nothing to trim, return original
+	if left == minX && right == maxX && top == minY && bottom == maxY {
+		return img
+	}
+
+	// Create cropped image
+	cropped := image.NewRGBA(image.Rect(0, 0, right-left, bottom-top))
+	draw.Copy(cropped, image.Point{}, img, image.Rect(left, top, right, bottom), draw.Src, nil)
+	return cropped
+}
+
+// colorsEqual compares two colors for exact equality
+func colorsEqual(c1, c2 color.Color) bool {
+	r1, g1, b1, a1 := c1.RGBA()
+	r2, g2, b2, a2 := c2.RGBA()
+	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
 }
