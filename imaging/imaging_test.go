@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestColorsEqual(t *testing.T) {
+func Test_colorsEqual(t *testing.T) {
 	tests := []struct {
 		name string
 		c1   color.Color
@@ -23,9 +23,9 @@ func TestColorsEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ColorsEqual(tt.c1, tt.c2)
+			got := colorsEqual(tt.c1, tt.c2)
 			if got != tt.want {
-				t.Errorf("ColorsEqual() = %v, want %v", got, tt.want)
+				t.Errorf("colorsEqual() = %v, want %v", got, tt.want)
 			}
 		})
 	}

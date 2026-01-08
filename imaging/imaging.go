@@ -26,7 +26,7 @@ func Trim(img image.Image) image.Image {
 			_, _, _, alpha := c.RGBA()
 			return alpha == 0
 		}
-		return ColorsEqual(c, topLeft)
+		return colorsEqual(c, topLeft)
 	}
 
 	// Find top edge
@@ -104,8 +104,8 @@ func Trim(img image.Image) image.Image {
 	return cropped
 }
 
-// ColorsEqual compares two colors for equality.
-func ColorsEqual(c1, c2 color.Color) bool {
+// colorsEqual compares two colors for equality.
+func colorsEqual(c1, c2 color.Color) bool {
 	r1, g1, b1, a1 := c1.RGBA()
 	r2, g2, b2, a2 := c2.RGBA()
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
@@ -132,24 +132,24 @@ func RemoveBackground(img image.Image) image.Image {
 	// Add all edge pixels matching background color to the queue
 	for x := bounds.Min.X; x < bounds.Max.X; x++ {
 		// Top edge
-		if ColorsEqual(img.At(x, bounds.Min.Y), bgColor) {
+		if colorsEqual(img.At(x, bounds.Min.Y), bgColor) {
 			queue = append(queue, point{x - bounds.Min.X, 0})
 			isBackground[0][x-bounds.Min.X] = true
 		}
 		// Bottom edge
-		if ColorsEqual(img.At(x, bounds.Max.Y-1), bgColor) {
+		if colorsEqual(img.At(x, bounds.Max.Y-1), bgColor) {
 			queue = append(queue, point{x - bounds.Min.X, height - 1})
 			isBackground[height-1][x-bounds.Min.X] = true
 		}
 	}
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		// Left edge
-		if ColorsEqual(img.At(bounds.Min.X, y), bgColor) {
+		if colorsEqual(img.At(bounds.Min.X, y), bgColor) {
 			queue = append(queue, point{0, y - bounds.Min.Y})
 			isBackground[y-bounds.Min.Y][0] = true
 		}
 		// Right edge
-		if ColorsEqual(img.At(bounds.Max.X-1, y), bgColor) {
+		if colorsEqual(img.At(bounds.Max.X-1, y), bgColor) {
 			queue = append(queue, point{width - 1, y - bounds.Min.Y})
 			isBackground[y-bounds.Min.Y][width-1] = true
 		}
@@ -164,7 +164,7 @@ func RemoveBackground(img image.Image) image.Image {
 		for _, d := range dirs {
 			nx, ny := p.x+d.x, p.y+d.y
 			if nx >= 0 && nx < width && ny >= 0 && ny < height && !isBackground[ny][nx] {
-				if ColorsEqual(img.At(nx+bounds.Min.X, ny+bounds.Min.Y), bgColor) {
+				if colorsEqual(img.At(nx+bounds.Min.X, ny+bounds.Min.Y), bgColor) {
 					isBackground[ny][nx] = true
 					queue = append(queue, point{nx, ny})
 				}
