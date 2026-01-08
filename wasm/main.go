@@ -58,12 +58,12 @@ func processImage(this js.Value, args []js.Value) interface{} {
 
 	// Apply trim if requested
 	if trim {
-		img = imaging.TrimImage(img)
+		img = imaging.Trim(img)
 	}
 
 	// Make background transparent if requested
 	if transparentBg {
-		img = imaging.MakeBackgroundTransparent(img)
+		img = imaging.RemoveBackground(img)
 	}
 
 	// Calculate new dimensions

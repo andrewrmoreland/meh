@@ -9,8 +9,8 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// TrimImage removes transparent borders (if image has transparency) or solid color borders.
-func TrimImage(img image.Image) image.Image {
+// Trim removes transparent borders (if image has transparency) or solid color borders.
+func Trim(img image.Image) image.Image {
 	bounds := img.Bounds()
 	minX, minY := bounds.Min.X, bounds.Min.Y
 	maxX, maxY := bounds.Max.X, bounds.Max.Y
@@ -111,9 +111,9 @@ func ColorsEqual(c1, c2 color.Color) bool {
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
 }
 
-// MakeBackgroundTransparent replaces background pixels with transparent pixels.
+// RemoveBackground replaces background pixels with transparent pixels.
 // Only pixels connected to the image edges are considered background (flood-fill from borders).
-func MakeBackgroundTransparent(img image.Image) image.Image {
+func RemoveBackground(img image.Image) image.Image {
 	bounds := img.Bounds()
 	bgColor := img.At(bounds.Min.X, bounds.Min.Y)
 	width := bounds.Dx()

@@ -46,8 +46,8 @@ cd wasm && python3 -m http.server 8080
 
 Contains the core image processing functions:
 
-- **`TrimImage(img)`** - Removes borders (transparent or solid color)
-- **`MakeBackgroundTransparent(img)`** - Flood-fill algorithm for background removal
+- **`Trim(img)`** - Removes borders (transparent or solid color)
+- **`RemoveBackground(img)`** - Flood-fill algorithm for background removal
 - **`ColorsEqual(c1, c2)`** - Color comparison utility
 
 ### `wasm/main.go` - WASM Entry Point
@@ -100,8 +100,8 @@ Uses CatmullRom interpolation via `golang.org/x/image/draw` for high-quality res
 
 **Test organization:**
 - `TestColorsEqual` - Color comparison (6 test cases)
-- `TestTrimImage_*` - Border trimming (7 test functions)
-- `TestMakeBackgroundTransparent_*` - Transparency function (6 test functions)
+- `TestTrim_*` - Border trimming (7 test functions)
+- `TestRemoveBackground_*` - Transparency function (6 test functions)
 
 **Testing patterns:**
 - Table-driven tests for multiple cases
@@ -131,7 +131,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`):
 ## Code Conventions
 
 ### Naming
-- **Exported Functions:** PascalCase (`TrimImage`, `MakeBackgroundTransparent`)
+- **Exported Functions:** PascalCase (`Trim`, `RemoveBackground`)
 - **Internal variables:** camelCase with descriptive names
 
 ### Error Handling
