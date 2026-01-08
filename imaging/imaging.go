@@ -1,6 +1,6 @@
-// Package imgproc provides image processing functions for resizing,
+// Package imaging provides image processing functions for resizing,
 // trimming borders, and background transparency manipulation.
-package imgproc
+package imaging
 
 import (
 	"image"

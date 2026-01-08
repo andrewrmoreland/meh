@@ -13,9 +13,9 @@ This document provides guidance for AI assistants working with this codebase.
 
 ```
 /
-├── imgproc/
-│   ├── imgproc.go            # Shared image processing functions
-│   └── imgproc_test.go       # Tests for image processing
+├── imaging/
+│   ├── imaging.go            # Shared image processing functions
+│   └── imaging_test.go       # Tests for image processing
 ├── wasm/
 │   ├── main.go               # WASM entry point
 │   ├── index.html            # Web interface
@@ -42,7 +42,7 @@ cd wasm && python3 -m http.server 8080
 
 ## Key Source Files
 
-### `imgproc/imgproc.go` - Shared Image Processing
+### `imaging/imaging.go` - Shared Image Processing
 
 Contains the core image processing functions:
 
@@ -96,7 +96,7 @@ Uses CatmullRom interpolation via `golang.org/x/image/draw` for high-quality res
 
 ## Testing
 
-**Test file:** `imgproc/imgproc_test.go`
+**Test file:** `imaging/imaging_test.go`
 
 **Test organization:**
 - `TestColorsEqual` - Color comparison (6 test cases)
@@ -160,7 +160,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`):
 
 2. **Test WASM locally** - Build with `./build-wasm.sh` and serve locally to verify browser behavior.
 
-3. **Add tests for new features** - Follow existing patterns in `imgproc/imgproc_test.go`.
+3. **Add tests for new features** - Follow existing patterns in `imaging/imaging_test.go`.
 
 4. **Edge cases to consider:**
    - Single-pixel images

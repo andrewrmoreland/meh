@@ -9,7 +9,7 @@ import (
 	"image/png"
 	"syscall/js"
 
-	"image-resizer/imgproc"
+	"image-resizer/imaging"
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
@@ -58,12 +58,12 @@ func processImage(this js.Value, args []js.Value) interface{} {
 
 	// Apply trim if requested
 	if trim {
-		img = imgproc.TrimImage(img)
+		img = imaging.TrimImage(img)
 	}
 
 	// Make background transparent if requested
 	if transparentBg {
-		img = imgproc.MakeBackgroundTransparent(img)
+		img = imaging.MakeBackgroundTransparent(img)
 	}
 
 	// Calculate new dimensions
