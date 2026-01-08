@@ -252,21 +252,75 @@ func colorsEqual(c1, c2 color.Color) bool {
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
 }
 
-// makeBackgroundTransparent replaces pixels matching the top-left corner color with transparent pixels
+// makeBackgroundTransparent replaces background pixels with transparent pixels.
+// Only pixels connected to the image edges are considered background (flood-fill from borders).
 func makeBackgroundTransparent(img image.Image) image.Image {
 	bounds := img.Bounds()
 	bgColor := img.At(bounds.Min.X, bounds.Min.Y)
+	width := bounds.Dx()
+	height := bounds.Dy()
 
-	// Create a new RGBA image
+	// Track which pixels are background (connected to edges)
+	isBackground := make([][]bool, height)
+	for i := range isBackground {
+		isBackground[i] = make([]bool, width)
+	}
+
+	// Flood-fill from all edge pixels that match the background color
+	type point struct{ x, y int }
+	queue := make([]point, 0)
+
+	// Add all edge pixels matching background color to the queue
+	for x := bounds.Min.X; x < bounds.Max.X; x++ {
+		// Top edge
+		if colorsEqual(img.At(x, bounds.Min.Y), bgColor) {
+			queue = append(queue, point{x - bounds.Min.X, 0})
+			isBackground[0][x-bounds.Min.X] = true
+		}
+		// Bottom edge
+		if colorsEqual(img.At(x, bounds.Max.Y-1), bgColor) {
+			queue = append(queue, point{x - bounds.Min.X, height - 1})
+			isBackground[height-1][x-bounds.Min.X] = true
+		}
+	}
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		// Left edge
+		if colorsEqual(img.At(bounds.Min.X, y), bgColor) {
+			queue = append(queue, point{0, y - bounds.Min.Y})
+			isBackground[y-bounds.Min.Y][0] = true
+		}
+		// Right edge
+		if colorsEqual(img.At(bounds.Max.X-1, y), bgColor) {
+			queue = append(queue, point{width - 1, y - bounds.Min.Y})
+			isBackground[y-bounds.Min.Y][width-1] = true
+		}
+	}
+
+	// BFS flood-fill
+	dirs := []point{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+
+		for _, d := range dirs {
+			nx, ny := p.x+d.x, p.y+d.y
+			if nx >= 0 && nx < width && ny >= 0 && ny < height && !isBackground[ny][nx] {
+				if colorsEqual(img.At(nx+bounds.Min.X, ny+bounds.Min.Y), bgColor) {
+					isBackground[ny][nx] = true
+					queue = append(queue, point{nx, ny})
+				}
+			}
+		}
+	}
+
+	// Create result image
 	result := image.NewRGBA(bounds)
-
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			c := img.At(x, y)
-			if colorsEqual(c, bgColor) {
+			if isBackground[y-bounds.Min.Y][x-bounds.Min.X] {
 				result.Set(x, y, color.Transparent)
 			} else {
-				result.Set(x, y, c)
+				result.Set(x, y, img.At(x, y))
 			}
 		}
 	}

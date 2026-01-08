@@ -316,6 +316,54 @@ func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
 	}
 }
 
+func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
+	// Create image with white background, red border around interior white
+	// The interior white should NOT become transparent (not connected to edge)
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+
+	// Fill with white (background)
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	// Red ring at (2,2) to (7,7)
+	red := color.RGBA{255, 0, 0, 255}
+	for y := 2; y < 8; y++ {
+		for x := 2; x < 8; x++ {
+			img.Set(x, y, red)
+		}
+	}
+
+	// White center at (4,4) to (5,5) - same color as background but not connected
+	for y := 4; y < 6; y++ {
+		for x := 4; x < 6; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	result := makeBackgroundTransparent(img)
+
+	// Edge background should be transparent
+	_, _, _, a := result.At(0, 0).RGBA()
+	if a != 0 {
+		t.Error("expected edge background to be transparent")
+	}
+
+	// Interior white (surrounded by red) should NOT be transparent
+	_, _, _, a = result.At(4, 4).RGBA()
+	if a == 0 {
+		t.Error("expected interior white pixel to remain opaque (not connected to edge)")
+	}
+
+	// Red ring should remain opaque
+	_, _, _, a = result.At(3, 3).RGBA()
+	if a == 0 {
+		t.Error("expected red pixel to remain opaque")
+	}
+}
+
 func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
 	// Create image with multiple colors
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
