@@ -1,17 +1,12 @@
-package main
+package imaging
 
 import (
-	"bytes"
 	"image"
 	"image/color"
-	"image/jpeg"
-	"image/png"
 	"testing"
-
-	"golang.org/x/image/draw"
 )
 
-func TestColorsEqual(t *testing.T) {
+func Test_colorsEqual(t *testing.T) {
 	tests := []struct {
 		name string
 		c1   color.Color
@@ -36,7 +31,7 @@ func TestColorsEqual(t *testing.T) {
 	}
 }
 
-func TestTrimImage_SolidBorder(t *testing.T) {
+func TestTrim_SolidBorder(t *testing.T) {
 	// Create 10x10 image with white border and red center (4x4)
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 
@@ -55,7 +50,7 @@ func TestTrimImage_SolidBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 4 || bounds.Dy() != 4 {
@@ -69,7 +64,7 @@ func TestTrimImage_SolidBorder(t *testing.T) {
 	}
 }
 
-func TestTrimImage_TransparentBorder(t *testing.T) {
+func TestTrim_TransparentBorder(t *testing.T) {
 	// Create 10x10 image with transparent border and opaque center
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 
@@ -88,7 +83,7 @@ func TestTrimImage_TransparentBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 6 || bounds.Dy() != 6 {
@@ -96,7 +91,7 @@ func TestTrimImage_TransparentBorder(t *testing.T) {
 	}
 }
 
-func TestTrimImage_NoTrimNeeded(t *testing.T) {
+func TestTrim_NoTrimNeeded(t *testing.T) {
 	// Create image with no uniform border
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
 
@@ -107,7 +102,7 @@ func TestTrimImage_NoTrimNeeded(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	// Should remain 5x5 since top-left pixel doesn't match others
@@ -116,7 +111,7 @@ func TestTrimImage_NoTrimNeeded(t *testing.T) {
 	}
 }
 
-func TestTrimImage_AllSameColor(t *testing.T) {
+func TestTrim_AllSameColor(t *testing.T) {
 	// Create image that's all one color
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
 
@@ -126,7 +121,7 @@ func TestTrimImage_AllSameColor(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	// Edge case: all same color means everything could be trimmed
@@ -136,100 +131,7 @@ func TestTrimImage_AllSameColor(t *testing.T) {
 	}
 }
 
-// createTestImage creates a test image with gradient colors
-func createTestImage(width, height int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			img.Set(x, y, color.RGBA{
-				uint8(x * 255 / width),
-				uint8(y * 255 / height),
-				128,
-				255,
-			})
-		}
-	}
-	return img
-}
-
-func TestJPEGQuality_AffectsFileSize(t *testing.T) {
-	img := createTestImage(100, 100)
-
-	// Encode at low quality
-	var lowQualityBuf bytes.Buffer
-	jpeg.Encode(&lowQualityBuf, img, &jpeg.Options{Quality: 10})
-
-	// Encode at high quality
-	var highQualityBuf bytes.Buffer
-	jpeg.Encode(&highQualityBuf, img, &jpeg.Options{Quality: 95})
-
-	lowSize := lowQualityBuf.Len()
-	highSize := highQualityBuf.Len()
-
-	if highSize <= lowSize {
-		t.Errorf("expected high quality (%d bytes) > low quality (%d bytes)", highSize, lowSize)
-	}
-}
-
-func TestPNGCompression_AffectsFileSize(t *testing.T) {
-	img := createTestImage(100, 100)
-
-	// Encode with no compression
-	var noCompressBuf bytes.Buffer
-	noCompressEncoder := &png.Encoder{CompressionLevel: png.NoCompression}
-	noCompressEncoder.Encode(&noCompressBuf, img)
-
-	// Encode with best compression
-	var bestCompressBuf bytes.Buffer
-	bestCompressEncoder := &png.Encoder{CompressionLevel: png.BestCompression}
-	bestCompressEncoder.Encode(&bestCompressBuf, img)
-
-	noCompressSize := noCompressBuf.Len()
-	bestCompressSize := bestCompressBuf.Len()
-
-	if bestCompressSize >= noCompressSize {
-		t.Errorf("expected best compression (%d bytes) < no compression (%d bytes)", bestCompressSize, noCompressSize)
-	}
-}
-
-func TestResize_MaintainsAspectRatio(t *testing.T) {
-	// Create 200x100 image (2:1 aspect ratio)
-	src := createTestImage(200, 100)
-
-	// Resize to width 100, height should be 50
-	dst := image.NewRGBA(image.Rect(0, 0, 100, 50))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
-
-	bounds := dst.Bounds()
-	if bounds.Dx() != 100 || bounds.Dy() != 50 {
-		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
-	}
-}
-
-func TestResize_Upscale(t *testing.T) {
-	// Create small image
-	src := createTestImage(50, 50)
-
-	// Upscale to 200x200
-	dst := image.NewRGBA(image.Rect(0, 0, 200, 200))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
-
-	bounds := dst.Bounds()
-	if bounds.Dx() != 200 || bounds.Dy() != 200 {
-		t.Errorf("expected 200x200, got %dx%d", bounds.Dx(), bounds.Dy())
-	}
-
-	// Verify it's not empty (check a pixel)
-	r, g, b, a := dst.At(100, 100).RGBA()
-	if a == 0 {
-		t.Error("expected non-transparent pixel in upscaled image")
-	}
-	if r == 0 && g == 0 && b == 0 {
-		t.Error("expected non-black pixel in upscaled image")
-	}
-}
-
-func TestTrimImage_AsymmetricBorder(t *testing.T) {
+func TestTrim_AsymmetricBorder(t *testing.T) {
 	// Create image with different border sizes on each side
 	img := image.NewRGBA(image.Rect(0, 0, 20, 15))
 
@@ -249,7 +151,7 @@ func TestTrimImage_AsymmetricBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 10 || bounds.Dy() != 10 {
@@ -257,7 +159,7 @@ func TestTrimImage_AsymmetricBorder(t *testing.T) {
 	}
 }
 
-func TestTrimImage_SinglePixelContent(t *testing.T) {
+func TestTrim_SinglePixelContent(t *testing.T) {
 	// Create image with single non-background pixel
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 
@@ -271,7 +173,7 @@ func TestTrimImage_SinglePixelContent(t *testing.T) {
 	// Single red pixel at (5,5)
 	img.Set(5, 5, color.RGBA{255, 0, 0, 255})
 
-	result := trimImage(img)
+	result := Trim(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 1 || bounds.Dy() != 1 {
@@ -279,7 +181,7 @@ func TestTrimImage_SinglePixelContent(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
+func TestRemoveBackground_SolidBackground(t *testing.T) {
 	// Create 10x10 image with white background and red center
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 
@@ -298,7 +200,7 @@ func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 
 	// Check that background pixels are now transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -316,7 +218,7 @@ func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
+func TestRemoveBackground_InteriorColorPreserved(t *testing.T) {
 	// Create image with white background, red border around interior white
 	// The interior white should NOT become transparent (not connected to edge)
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
@@ -343,7 +245,7 @@ func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 
 	// Edge background should be transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -364,7 +266,7 @@ func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
+func TestRemoveBackground_PreservesNonBackground(t *testing.T) {
 	// Create image with multiple colors
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
 
@@ -380,7 +282,7 @@ func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
 	img.Set(2, 2, color.RGBA{0, 255, 0, 255}) // green
 	img.Set(3, 3, color.RGBA{255, 0, 0, 255}) // red
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 
 	// Blue pixels should be transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -401,7 +303,7 @@ func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_AlreadyTransparent(t *testing.T) {
+func TestRemoveBackground_AlreadyTransparent(t *testing.T) {
 	// Create image with transparent background
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
 
@@ -415,7 +317,7 @@ func TestMakeBackgroundTransparent_AlreadyTransparent(t *testing.T) {
 	// Add opaque pixel
 	img.Set(2, 2, color.RGBA{255, 0, 0, 255})
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 
 	// Background should remain transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -430,7 +332,7 @@ func TestMakeBackgroundTransparent_AlreadyTransparent(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
+func TestRemoveBackground_AllSameColor(t *testing.T) {
 	// Create image that's all one color
 	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
 
@@ -440,7 +342,7 @@ func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 
 	// All pixels should become transparent
 	for y := 0; y < 5; y++ {
@@ -453,13 +355,29 @@ func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
 	}
 }
 
-func TestMakeBackgroundTransparent_PreservesDimensions(t *testing.T) {
+func TestRemoveBackground_PreservesDimensions(t *testing.T) {
 	img := createTestImage(100, 50)
 
-	result := makeBackgroundTransparent(img)
+	result := RemoveBackground(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 100 || bounds.Dy() != 50 {
 		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
+}
+
+// createTestImage creates a test image with gradient colors
+func createTestImage(width, height int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				uint8(x * 255 / width),
+				uint8(y * 255 / height),
+				128,
+				255,
+			})
+		}
+	}
+	return img
 }
