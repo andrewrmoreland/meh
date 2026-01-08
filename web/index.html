@@ -279,11 +279,90 @@
             margin-top: var(--space-xs);
         }
 
+        /* Original dimensions display */
+        .original-dimensions {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-sm);
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-surface-hover);
+            border-radius: var(--radius-sm);
+            display: inline-block;
+        }
+
+        /* Resize presets */
+        .resize-presets {
+            display: flex;
+            gap: var(--space-xs);
+            margin-bottom: var(--space-md);
+        }
+
+        .preset-btn {
+            flex: 1;
+            padding: var(--space-xs) var(--space-sm);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-xs);
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .preset-btn:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        .preset-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: white;
+        }
+
         /* Dimension inputs */
         .dimension-row {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: var(--space-md);
+            grid-template-columns: 1fr auto 1fr;
+            gap: var(--space-sm);
+            align-items: center;
+        }
+
+        /* Aspect ratio lock button */
+        .aspect-lock {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            font-size: 1rem;
+        }
+
+        .aspect-lock:hover {
+            border-color: var(--color-primary);
+        }
+
+        .aspect-lock.locked {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: white;
+        }
+
+        .aspect-lock:not(.locked) .lock-icon::after {
+            content: '🔓';
+        }
+
+        .aspect-lock.locked .lock-icon::after {
+            content: '🔗';
+        }
+
+        .lock-icon {
+            font-size: 0;
         }
 
         .input-group {
@@ -691,6 +770,15 @@
                 grid-template-columns: 1fr;
                 gap: var(--space-sm);
             }
+
+            .aspect-lock {
+                justify-self: center;
+                transform: rotate(90deg);
+            }
+
+            .resize-presets {
+                flex-wrap: wrap;
+            }
         }
 
         /* Hidden utility */
@@ -739,17 +827,29 @@
                 <!-- Dimensions -->
                 <div class="form-section">
                     <label class="form-label">Dimensions</label>
+                    <div id="originalDimensions" class="original-dimensions hidden">
+                        Original: <span id="originalSize">-</span>
+                    </div>
+                    <div class="resize-presets hidden" id="resizePresets">
+                        <button type="button" class="preset-btn" data-scale="0.25">25%</button>
+                        <button type="button" class="preset-btn" data-scale="0.5">50%</button>
+                        <button type="button" class="preset-btn" data-scale="0.75">75%</button>
+                        <button type="button" class="preset-btn active" data-scale="1">100%</button>
+                    </div>
                     <div class="dimension-row">
                         <div class="input-group">
-                            <input type="number" id="width" placeholder="Width">
+                            <input type="number" id="width" placeholder="Width" min="1">
                             <span class="input-suffix">px</span>
                         </div>
+                        <button type="button" id="aspectLock" class="aspect-lock locked" title="Lock aspect ratio">
+                            <span class="lock-icon">&#128279;</span>
+                        </button>
                         <div class="input-group">
-                            <input type="number" id="height" placeholder="Height">
+                            <input type="number" id="height" placeholder="Height" min="1">
                             <span class="input-suffix">px</span>
                         </div>
                     </div>
-                    <p class="form-hint">Leave empty to maintain aspect ratio</p>
+                    <p class="form-hint">Click the link icon to unlock independent width/height</p>
                 </div>
 
                 <!-- Format -->
@@ -836,6 +936,11 @@
         const go = new Go();
         let wasmReady = false;
 
+        // Image state
+        let originalWidth = 0;
+        let originalHeight = 0;
+        let aspectRatioLocked = true;
+
         // DOM Elements
         const statusEl = document.getElementById('status');
         const statusText = statusEl.querySelector('.status-text');
@@ -844,6 +949,12 @@
         const form = document.getElementById('form');
         const submitBtn = document.getElementById('submit');
         const resultEl = document.getElementById('result');
+        const widthInput = document.getElementById('width');
+        const heightInput = document.getElementById('height');
+        const aspectLockBtn = document.getElementById('aspectLock');
+        const originalDimensionsEl = document.getElementById('originalDimensions');
+        const originalSizeEl = document.getElementById('originalSize');
+        const resizePresetsEl = document.getElementById('resizePresets');
 
         // Format file size
         function formatSize(bytes) {
@@ -912,10 +1023,32 @@
             const name = preview.querySelector('.file-preview-name');
             const size = preview.querySelector('.file-preview-size');
 
-            // Create thumbnail
+            // Create thumbnail and get dimensions
             const reader = new FileReader();
             reader.onload = e => {
                 thumb.src = e.target.result;
+
+                // Load image to get dimensions
+                const img = new Image();
+                img.onload = () => {
+                    originalWidth = img.width;
+                    originalHeight = img.height;
+
+                    // Show original dimensions
+                    originalSizeEl.textContent = `${originalWidth} × ${originalHeight} px`;
+                    originalDimensionsEl.classList.remove('hidden');
+                    resizePresetsEl.classList.remove('hidden');
+
+                    // Set initial values to original size (100%)
+                    widthInput.value = originalWidth;
+                    heightInput.value = originalHeight;
+                    widthInput.placeholder = originalWidth;
+                    heightInput.placeholder = originalHeight;
+
+                    // Reset preset selection to 100%
+                    updatePresetSelection(1);
+                };
+                img.src = e.target.result;
             };
             reader.readAsDataURL(file);
 
@@ -936,6 +1069,72 @@
             content.classList.remove('hidden');
             preview.classList.add('hidden');
             dropZone.classList.remove('has-file');
+
+            // Reset dimensions UI
+            originalWidth = 0;
+            originalHeight = 0;
+            widthInput.value = '';
+            heightInput.value = '';
+            widthInput.placeholder = 'Width';
+            heightInput.placeholder = 'Height';
+            originalDimensionsEl.classList.add('hidden');
+            resizePresetsEl.classList.add('hidden');
+            updatePresetSelection(null);
+        });
+
+        // Helper to update preset button selection
+        function updatePresetSelection(scale) {
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                const btnScale = parseFloat(btn.dataset.scale);
+                btn.classList.toggle('active', btnScale === scale);
+            });
+        }
+
+        // Aspect ratio lock toggle
+        aspectLockBtn.addEventListener('click', () => {
+            aspectRatioLocked = !aspectRatioLocked;
+            aspectLockBtn.classList.toggle('locked', aspectRatioLocked);
+        });
+
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!originalWidth || !originalHeight) return;
+
+                const scale = parseFloat(btn.dataset.scale);
+                const newWidth = Math.round(originalWidth * scale);
+                const newHeight = Math.round(originalHeight * scale);
+
+                widthInput.value = newWidth;
+                heightInput.value = newHeight;
+                updatePresetSelection(scale);
+            });
+        });
+
+        // Width input change - calculate height if aspect ratio is locked
+        widthInput.addEventListener('input', () => {
+            updatePresetSelection(null); // Clear preset selection
+
+            if (!aspectRatioLocked || !originalWidth || !originalHeight) return;
+
+            const newWidth = parseInt(widthInput.value) || 0;
+            if (newWidth > 0) {
+                const ratio = originalHeight / originalWidth;
+                heightInput.value = Math.round(newWidth * ratio);
+            }
+        });
+
+        // Height input change - calculate width if aspect ratio is locked
+        heightInput.addEventListener('input', () => {
+            updatePresetSelection(null); // Clear preset selection
+
+            if (!aspectRatioLocked || !originalWidth || !originalHeight) return;
+
+            const newHeight = parseInt(heightInput.value) || 0;
+            if (newHeight > 0) {
+                const ratio = originalWidth / originalHeight;
+                widthInput.value = Math.round(newHeight * ratio);
+            }
         });
 
         // Format change - toggle quality/compression sections and transparent option
