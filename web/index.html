@@ -1,191 +1,1027 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Image Resizer (WASM)</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer</title>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
-        input, select, button { margin: 5px 0; }
-        #status { color: #666; margin: 10px 0; }
-        #result { margin-top: 20px; }
-        #result img { max-width: 100%; border: 1px solid #ccc; }
-        .error { color: red; }
-        button:disabled { opacity: 0.5; }
-        .size-info { background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        /* ===== Design System ===== */
+        :root {
+            /* Colors */
+            --color-primary: #667eea;
+            --color-primary-dark: #5a67d8;
+            --color-secondary: #764ba2;
+            --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+
+            /* Surface colors */
+            --color-bg: #f0f2f5;
+            --color-surface: #ffffff;
+            --color-surface-hover: #f8f9fa;
+            --color-border: #e1e5eb;
+            --color-border-focus: var(--color-primary);
+
+            /* Text colors */
+            --color-text: #1a1a2e;
+            --color-text-secondary: #6b7280;
+            --color-text-muted: #9ca3af;
+
+            /* Semantic colors */
+            --color-success: #10b981;
+            --color-error: #ef4444;
+            --color-warning: #f59e0b;
+
+            /* Spacing */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+
+            /* Border radius */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+            /* Transitions */
+            --transition-fast: 150ms ease;
+            --transition-normal: 200ms ease;
+            --transition-slow: 300ms ease;
+
+            /* Typography */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-size-xs: 0.75rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+            --font-size-xl: 1.25rem;
+            --font-size-2xl: 1.5rem;
+        }
+
+        /* ===== Reset & Base ===== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-size-base);
+            line-height: 1.6;
+            color: var(--color-text);
+            background: var(--color-bg);
+            min-height: 100vh;
+            padding: var(--space-md);
+        }
+
+        /* ===== Layout ===== */
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: var(--space-lg);
+        }
+
+        .card {
+            background: var(--color-surface);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            padding: var(--space-xl);
+            margin-bottom: var(--space-lg);
+        }
+
+        /* ===== Header ===== */
+        .header {
+            text-align: center;
+            margin-bottom: var(--space-xl);
+        }
+
+        .header-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--gradient-primary);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--space-md);
+            font-size: 1.75rem;
+        }
+
+        .header h1 {
+            font-size: var(--font-size-2xl);
+            font-weight: 700;
+            color: var(--color-text);
+            margin-bottom: var(--space-xs);
+        }
+
+        .header p {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+
+        /* ===== Status Badge ===== */
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-surface-hover);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            color: var(--color-text-secondary);
+            margin-top: var(--space-sm);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--color-text-muted);
+        }
+
+        .status.ready .status-dot {
+            background: var(--color-success);
+        }
+
+        .status.loading .status-dot {
+            background: var(--color-warning);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status.error .status-dot {
+            background: var(--color-error);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ===== Drop Zone ===== */
+        .drop-zone {
+            border: 2px dashed var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-xl) var(--space-lg);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            margin-bottom: var(--space-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--color-primary);
+            background: rgba(102, 126, 234, 0.04);
+        }
+
+        .drop-zone.drag-over {
+            border-color: var(--color-primary);
+            background: rgba(102, 126, 234, 0.08);
+            transform: scale(1.01);
+        }
+
+        .drop-zone.has-file {
+            border-style: solid;
+            border-color: var(--color-border);
+            padding: var(--space-md);
+        }
+
+        .drop-zone-icon {
+            font-size: 2.5rem;
+            margin-bottom: var(--space-sm);
+        }
+
+        .drop-zone-text {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+
+        .drop-zone-text strong {
+            color: var(--color-primary);
+        }
+
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* File Preview */
+        .file-preview {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            text-align: left;
+        }
+
+        .file-preview-thumb {
+            width: 64px;
+            height: 64px;
+            border-radius: var(--radius-sm);
+            object-fit: cover;
+            background: var(--color-bg);
+        }
+
+        .file-preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-preview-name {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-preview-size {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+        }
+
+        .file-preview-change {
+            font-size: var(--font-size-xs);
+            color: var(--color-primary);
+            cursor: pointer;
+        }
+
+        .file-preview-change:hover {
+            text-decoration: underline;
+        }
+
+        /* ===== Form Controls ===== */
+        .form-section {
+            margin-bottom: var(--space-lg);
+        }
+
+        .form-label {
+            display: block;
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            color: var(--color-text);
+            margin-bottom: var(--space-sm);
+        }
+
+        .form-hint {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+            margin-top: var(--space-xs);
+        }
+
+        /* Dimension inputs */
+        .dimension-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            padding-right: 40px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-base);
+            color: var(--color-text);
+            background: var(--color-surface);
+            transition: all var(--transition-fast);
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .input-group input::placeholder {
+            color: var(--color-text-muted);
+        }
+
+        .input-suffix {
+            position: absolute;
+            right: var(--space-sm);
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+        }
+
+        /* Select */
+        .select-wrapper {
+            position: relative;
+        }
+
+        .select-wrapper select {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            padding-right: 36px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-base);
+            color: var(--color-text);
+            background: var(--color-surface);
+            cursor: pointer;
+            appearance: none;
+            transition: all var(--transition-fast);
+        }
+
+        .select-wrapper select:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .select-wrapper::after {
+            content: '';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid var(--color-text-muted);
+            pointer-events: none;
+        }
+
+        /* Range Slider */
+        .range-container {
+            padding: var(--space-xs) 0;
+        }
+
+        .range-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm);
+        }
+
+        .range-value {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .range-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--color-border);
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: transform var(--transition-fast);
+        }
+
+        .range-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .range-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+            border: none;
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Toggle Switch */
+        .toggle-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .toggle-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-md);
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-track {
+            position: absolute;
+            inset: 0;
+            background: var(--color-border);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .toggle-track::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            top: 3px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: var(--shadow-sm);
+            transition: transform var(--transition-fast);
+        }
+
+        .toggle input:checked + .toggle-track {
+            background: var(--color-primary);
+        }
+
+        .toggle input:checked + .toggle-track::before {
+            transform: translateX(20px);
+        }
+
+        .toggle input:focus + .toggle-track {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+
+        .toggle-content {
+            flex: 1;
+        }
+
+        .toggle-label {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .toggle-description {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+            margin-top: 2px;
+        }
+
+        /* ===== Submit Button ===== */
+        .submit-btn {
+            width: 100%;
+            padding: var(--space-md) var(--space-lg);
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            box-shadow: var(--shadow-md);
+            margin-top: var(--space-lg);
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .submit-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .submit-btn.processing {
+            position: relative;
+            color: transparent;
+        }
+
+        .submit-btn.processing::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin: -10px 0 0 -10px;
+            border: 2px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== Result Section ===== */
+        .result {
+            animation: fadeIn var(--transition-slow);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }
+
+        .result-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+        }
+
+        .result-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+
+        .result-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-bg);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            color: var(--color-text-secondary);
+        }
+
+        .result-badge.savings {
+            color: var(--color-success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .result-badge.increase {
+            color: var(--color-warning);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .result-image-container {
+            position: relative;
+            background: var(--color-bg);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: var(--space-md);
+        }
+
+        /* Checkerboard pattern for transparency */
+        .result-image-container::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(45deg, #e0e0e0 25%, transparent 25%),
+                linear-gradient(-45deg, #e0e0e0 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #e0e0e0 75%),
+                linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+            background-size: 16px 16px;
+            background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        }
+
+        .result-image {
+            position: relative;
+            display: block;
+            max-width: 100%;
+            max-height: 300px;
+            margin: 0 auto;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            width: 100%;
+            padding: var(--space-md) var(--space-lg);
+            background: var(--color-text);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .download-btn:hover {
+            background: #2d2d3d;
+        }
+
+        .download-icon {
+            font-size: 1.1em;
+        }
+
+        /* ===== Footer ===== */
+        .footer {
+            text-align: center;
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 480px) {
+            body {
+                padding: var(--space-sm);
+            }
+
+            .container {
+                padding: 0;
+            }
+
+            .card {
+                padding: var(--space-lg);
+                border-radius: var(--radius-md);
+            }
+
+            .header-icon {
+                width: 48px;
+                height: 48px;
+                font-size: 1.5rem;
+            }
+
+            .header h1 {
+                font-size: var(--font-size-xl);
+            }
+
+            .drop-zone {
+                padding: var(--space-lg) var(--space-md);
+            }
+
+            .drop-zone-icon {
+                font-size: 2rem;
+            }
+
+            .dimension-row {
+                grid-template-columns: 1fr;
+                gap: var(--space-sm);
+            }
+        }
+
+        /* Hidden utility */
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
-    <h1>Image Resizer</h1>
-    <p id="status">Loading WASM...</p>
+    <div class="container">
+        <div class="card">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-icon">
+                    <span>&#128444;</span>
+                </div>
+                <h1>Image Resizer</h1>
+                <p>Resize, trim, and optimize images in your browser</p>
+                <div id="status" class="status loading">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Loading...</span>
+                </div>
+            </header>
 
-    <form id="form">
-        <p>
-            <label>Image: <input type="file" id="image" accept="image/*" required></label>
-            <span id="inputSize"></span>
-        </p>
-        <p>
-            <label>Width: <input type="number" id="width" placeholder="e.g. 200"></label>
-        </p>
-        <p>
-            <label>Height: <input type="number" id="height" placeholder="e.g. 200"></label>
-        </p>
-        <p>
-            <label>Output format:
-                <select id="format">
-                    <option value="png">PNG</option>
-                    <option value="jpeg">JPEG</option>
-                </select>
-            </label>
-        </p>
-        <p id="qualityRow">
-            <label><span id="qualityLabel">Quality</span>: <input type="range" id="quality" min="1" max="100" value="90">
-            <span id="qualityValue">90</span><span id="qualityUnit">%</span></label>
-            <br><small id="qualityHint">Higher = better quality, larger file</small>
-        </p>
-        <p>
-            <label><input type="checkbox" id="trim"> Trim borders (transparent or solid color)</label>
-        </p>
-        <p id="transparentBgRow">
-            <label><input type="checkbox" id="transparentBg"> Make background transparent (uses top-left pixel color)</label>
-        </p>
-        <p>
-            <button type="submit" id="submit" disabled>Resize</button>
-        </p>
-    </form>
-    <p><small>Supports PNG, JPEG, and WebP input. Leave width or height empty to maintain aspect ratio.</small></p>
-    <p><small>All processing happens in your browser - no server upload.</small></p>
+            <!-- Form -->
+            <form id="form">
+                <!-- Drop Zone -->
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <div class="drop-zone-icon">&#128194;</div>
+                        <div class="drop-zone-text">
+                            <strong>Choose a file</strong> or drag it here
+                        </div>
+                    </div>
+                    <div class="file-preview hidden">
+                        <img class="file-preview-thumb" src="" alt="Preview">
+                        <div class="file-preview-info">
+                            <div class="file-preview-name"></div>
+                            <div class="file-preview-size"></div>
+                        </div>
+                        <span class="file-preview-change">Change</span>
+                    </div>
+                    <input type="file" id="image" accept="image/*" required>
+                </div>
 
-    <div id="result"></div>
+                <!-- Dimensions -->
+                <div class="form-section">
+                    <label class="form-label">Dimensions</label>
+                    <div class="dimension-row">
+                        <div class="input-group">
+                            <input type="number" id="width" placeholder="Width">
+                            <span class="input-suffix">px</span>
+                        </div>
+                        <div class="input-group">
+                            <input type="number" id="height" placeholder="Height">
+                            <span class="input-suffix">px</span>
+                        </div>
+                    </div>
+                    <p class="form-hint">Leave empty to maintain aspect ratio</p>
+                </div>
+
+                <!-- Format -->
+                <div class="form-section">
+                    <label class="form-label" for="format">Output Format</label>
+                    <div class="select-wrapper">
+                        <select id="format">
+                            <option value="png">PNG - Lossless, supports transparency</option>
+                            <option value="jpeg">JPEG - Smaller size, no transparency</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Quality -->
+                <div class="form-section" id="qualitySection">
+                    <div class="range-container">
+                        <div class="range-header">
+                            <label class="form-label" id="qualityLabel" for="quality">Quality</label>
+                            <span class="range-value"><span id="qualityValue">90</span>%</span>
+                        </div>
+                        <input type="range" id="quality" class="range-slider" min="1" max="100" value="90">
+                    </div>
+                    <p class="form-hint" id="qualityHint">Higher = better quality, larger file</p>
+                </div>
+
+                <!-- Options -->
+                <div class="form-section">
+                    <label class="form-label">Options</label>
+                    <div class="toggle-group">
+                        <div class="toggle-item">
+                            <label class="toggle">
+                                <input type="checkbox" id="trim">
+                                <span class="toggle-track"></span>
+                            </label>
+                            <div class="toggle-content">
+                                <div class="toggle-label">Trim borders</div>
+                                <div class="toggle-description">Remove transparent or solid color edges</div>
+                            </div>
+                        </div>
+                        <div class="toggle-item" id="transparentBgRow">
+                            <label class="toggle">
+                                <input type="checkbox" id="transparentBg">
+                                <span class="toggle-track"></span>
+                            </label>
+                            <div class="toggle-content">
+                                <div class="toggle-label">Make background transparent</div>
+                                <div class="toggle-description">Uses top-left pixel as reference color</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <button type="submit" id="submit" class="submit-btn" disabled>
+                    Resize Image
+                </button>
+            </form>
+        </div>
+
+        <!-- Result -->
+        <div id="result"></div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            All processing happens locally in your browser. No files are uploaded.
+        </footer>
+    </div>
 
     <script src="wasm_exec.js"></script>
     <script>
         const go = new Go();
         let wasmReady = false;
 
-        // Format file size for display
+        // DOM Elements
+        const statusEl = document.getElementById('status');
+        const statusText = statusEl.querySelector('.status-text');
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('image');
+        const form = document.getElementById('form');
+        const submitBtn = document.getElementById('submit');
+        const resultEl = document.getElementById('result');
+
+        // Format file size
         function formatSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
         }
 
+        // Update status
+        function setStatus(state, text) {
+            statusEl.className = 'status ' + state;
+            statusText.textContent = text;
+        }
+
+        // Load WASM
         WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
             .then((result) => {
                 go.run(result.instance);
                 wasmReady = true;
-                document.getElementById("status").textContent = "Ready";
-                document.getElementById("submit").disabled = false;
+                setStatus('ready', 'Ready');
+                submitBtn.disabled = false;
             })
             .catch((err) => {
-                document.getElementById("status").innerHTML =
-                    '<span class="error">Failed to load WASM: ' + err.message + '</span>';
+                setStatus('error', 'Failed to load: ' + err.message);
             });
 
-        // Update quality label based on format
-        function updateQualityLabel() {
-            const format = document.getElementById("format").value;
-            const label = document.getElementById("qualityLabel");
-            const hint = document.getElementById("qualityHint");
-
-            if (format === "jpeg") {
-                label.textContent = "Quality";
-                hint.textContent = "Higher = better quality, larger file";
-            } else {
-                label.textContent = "Speed";
-                hint.textContent = "Higher = faster encode, larger file (PNG is always lossless)";
-            }
-        }
-
-        document.getElementById("format").addEventListener("change", updateQualityLabel);
-        updateQualityLabel();
-
-        // Hide transparent background option when JPEG is selected (JPEG doesn't support transparency)
-        function updateTransparentBgVisibility() {
-            const format = document.getElementById("format").value;
-            const row = document.getElementById("transparentBgRow");
-            const checkbox = document.getElementById("transparentBg");
-            if (format === "jpeg") {
-                row.style.display = "none";
-                checkbox.checked = false;
-            } else {
-                row.style.display = "";
-            }
-        }
-
-        document.getElementById("format").addEventListener("change", updateTransparentBgVisibility);
-        updateTransparentBgVisibility();
-
-        // Update quality value display
-        document.getElementById("quality").addEventListener("input", (e) => {
-            document.getElementById("qualityValue").textContent = e.target.value;
+        // Drag and drop handling
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+            dropZone.addEventListener(event, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
         });
 
-        // Show input file size
-        document.getElementById("image").addEventListener("change", (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                document.getElementById("inputSize").textContent = `(${formatSize(file.size)})`;
+        ['dragenter', 'dragover'].forEach(event => {
+            dropZone.addEventListener(event, () => {
+                dropZone.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(event => {
+            dropZone.addEventListener(event, () => {
+                dropZone.classList.remove('drag-over');
+            });
+        });
+
+        dropZone.addEventListener('drop', e => {
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                fileInput.files = files;
+                handleFileSelect(files[0]);
             }
         });
 
-        document.getElementById("form").addEventListener("submit", async (e) => {
+        // File selection
+        fileInput.addEventListener('change', e => {
+            if (e.target.files.length) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            const content = dropZone.querySelector('.drop-zone-content');
+            const preview = dropZone.querySelector('.file-preview');
+            const thumb = preview.querySelector('.file-preview-thumb');
+            const name = preview.querySelector('.file-preview-name');
+            const size = preview.querySelector('.file-preview-size');
+
+            // Create thumbnail
+            const reader = new FileReader();
+            reader.onload = e => {
+                thumb.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+
+            name.textContent = file.name;
+            size.textContent = formatSize(file.size);
+
+            content.classList.add('hidden');
+            preview.classList.remove('hidden');
+            dropZone.classList.add('has-file');
+        }
+
+        // Change file handler
+        dropZone.querySelector('.file-preview-change').addEventListener('click', e => {
+            e.stopPropagation();
+            fileInput.value = '';
+            const content = dropZone.querySelector('.drop-zone-content');
+            const preview = dropZone.querySelector('.file-preview');
+            content.classList.remove('hidden');
+            preview.classList.add('hidden');
+            dropZone.classList.remove('has-file');
+        });
+
+        // Format change - update quality label and transparent option visibility
+        document.getElementById('format').addEventListener('change', function() {
+            const label = document.getElementById('qualityLabel');
+            const hint = document.getElementById('qualityHint');
+            const transparentRow = document.getElementById('transparentBgRow');
+            const transparentCheckbox = document.getElementById('transparentBg');
+
+            if (this.value === 'jpeg') {
+                label.textContent = 'Quality';
+                hint.textContent = 'Higher = better quality, larger file';
+                transparentRow.classList.add('hidden');
+                transparentCheckbox.checked = false;
+            } else {
+                label.textContent = 'Speed';
+                hint.textContent = 'Higher = faster encode, larger file (PNG is always lossless)';
+                transparentRow.classList.remove('hidden');
+            }
+        });
+
+        // Quality slider value display
+        document.getElementById('quality').addEventListener('input', function() {
+            document.getElementById('qualityValue').textContent = this.value;
+        });
+
+        // Form submission
+        form.addEventListener('submit', async e => {
             e.preventDefault();
 
             if (!wasmReady) {
-                alert("WASM not loaded yet");
+                alert('WASM not loaded yet');
                 return;
             }
 
-            const fileInput = document.getElementById("image");
             const file = fileInput.files[0];
             if (!file) {
-                alert("Please select an image");
+                alert('Please select an image');
                 return;
             }
 
-            const status = document.getElementById("status");
-            status.textContent = "Processing...";
+            setStatus('loading', 'Processing...');
+            submitBtn.classList.add('processing');
+            submitBtn.disabled = true;
 
             try {
-                // Read file as ArrayBuffer
                 const arrayBuffer = await file.arrayBuffer();
                 const uint8Array = new Uint8Array(arrayBuffer);
 
-                // Get options
-                const width = parseInt(document.getElementById("width").value) || 0;
-                const height = parseInt(document.getElementById("height").value) || 0;
-                const trim = document.getElementById("trim").checked;
-                const format = document.getElementById("format").value;
-                const quality = parseInt(document.getElementById("quality").value) || 90;
-                const transparentBg = document.getElementById("transparentBg").checked;
+                const width = parseInt(document.getElementById('width').value) || 0;
+                const height = parseInt(document.getElementById('height').value) || 0;
+                const trim = document.getElementById('trim').checked;
+                const format = document.getElementById('format').value;
+                const quality = parseInt(document.getElementById('quality').value) || 90;
+                const transparentBg = document.getElementById('transparentBg').checked;
 
-                // Call WASM function
                 const result = processImage(uint8Array, width, height, trim, format, quality, transparentBg);
 
                 if (result.error) {
                     throw new Error(result.error);
                 }
 
-                // Create blob and display result
                 const blob = new Blob([result.data], { type: result.mimeType });
                 const url = URL.createObjectURL(blob);
+                const ext = format === 'jpeg' ? 'jpg' : 'png';
 
-                const ext = format === "jpeg" ? "jpg" : "png";
-                const savings = file.size > result.size
-                    ? `<span style="color: green">(-${formatSize(file.size - result.size)})</span>`
-                    : `<span style="color: orange">(+${formatSize(result.size - file.size)})</span>`;
+                const sizeDiff = file.size - result.size;
+                const savingsClass = sizeDiff > 0 ? 'savings' : 'increase';
+                const savingsText = sizeDiff > 0
+                    ? '-' + formatSize(sizeDiff)
+                    : '+' + formatSize(-sizeDiff);
 
-                document.getElementById("result").innerHTML = `
-                    <div class="size-info">
-                        <strong>Output:</strong> ${result.width} x ${result.height} &bull; ${formatSize(result.size)} ${savings}
+                resultEl.innerHTML = `
+                    <div class="card result">
+                        <div class="result-header">
+                            <span class="result-title">Result</span>
+                        </div>
+                        <div class="result-meta">
+                            <span class="result-badge">${result.width} × ${result.height}</span>
+                            <span class="result-badge">${formatSize(result.size)}</span>
+                            <span class="result-badge ${savingsClass}">${savingsText}</span>
+                        </div>
+                        <div class="result-image-container">
+                            <img src="${url}" alt="Resized image" class="result-image">
+                        </div>
+                        <a href="${url}" download="resized.${ext}" class="download-btn">
+                            <span class="download-icon">&#8595;</span>
+                            Download ${ext.toUpperCase()}
+                        </a>
                     </div>
-                    <img src="${url}" alt="Resized image">
-                    <p><a href="${url}" download="resized.${ext}">Download</a></p>
                 `;
 
-                status.textContent = "Done!";
+                setStatus('ready', 'Done!');
             } catch (err) {
-                status.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
-                document.getElementById("result").innerHTML = '';
+                setStatus('error', 'Error: ' + err.message);
+                resultEl.innerHTML = '';
+            } finally {
+                submitBtn.classList.remove('processing');
+                submitBtn.disabled = false;
             }
         });
     </script>
