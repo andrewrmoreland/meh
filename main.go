@@ -52,6 +52,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
             <label><input type="checkbox" name="trim" value="1"> Trim borders (transparent or solid color)</label>
         </p>
         <p>
+            <label><input type="checkbox" name="transparentBg" value="1"> Make background transparent (uses top-left pixel color, PNG only)</label>
+        </p>
+        <p>
             <button type="submit">Resize</button>
         </p>
     </form>
@@ -93,6 +96,11 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 	// Apply trim if requested
 	if r.FormValue("trim") == "1" {
 		img = trimImage(img)
+	}
+
+	// Make background transparent if requested
+	if r.FormValue("transparentBg") == "1" {
+		img = makeBackgroundTransparent(img)
 	}
 
 	// Get dimensions
@@ -242,4 +250,80 @@ func colorsEqual(c1, c2 color.Color) bool {
 	r1, g1, b1, a1 := c1.RGBA()
 	r2, g2, b2, a2 := c2.RGBA()
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
+}
+
+// makeBackgroundTransparent replaces background pixels with transparent pixels.
+// Only pixels connected to the image edges are considered background (flood-fill from borders).
+func makeBackgroundTransparent(img image.Image) image.Image {
+	bounds := img.Bounds()
+	bgColor := img.At(bounds.Min.X, bounds.Min.Y)
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	// Track which pixels are background (connected to edges)
+	isBackground := make([][]bool, height)
+	for i := range isBackground {
+		isBackground[i] = make([]bool, width)
+	}
+
+	// Flood-fill from all edge pixels that match the background color
+	type point struct{ x, y int }
+	queue := make([]point, 0)
+
+	// Add all edge pixels matching background color to the queue
+	for x := bounds.Min.X; x < bounds.Max.X; x++ {
+		// Top edge
+		if colorsEqual(img.At(x, bounds.Min.Y), bgColor) {
+			queue = append(queue, point{x - bounds.Min.X, 0})
+			isBackground[0][x-bounds.Min.X] = true
+		}
+		// Bottom edge
+		if colorsEqual(img.At(x, bounds.Max.Y-1), bgColor) {
+			queue = append(queue, point{x - bounds.Min.X, height - 1})
+			isBackground[height-1][x-bounds.Min.X] = true
+		}
+	}
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		// Left edge
+		if colorsEqual(img.At(bounds.Min.X, y), bgColor) {
+			queue = append(queue, point{0, y - bounds.Min.Y})
+			isBackground[y-bounds.Min.Y][0] = true
+		}
+		// Right edge
+		if colorsEqual(img.At(bounds.Max.X-1, y), bgColor) {
+			queue = append(queue, point{width - 1, y - bounds.Min.Y})
+			isBackground[y-bounds.Min.Y][width-1] = true
+		}
+	}
+
+	// BFS flood-fill
+	dirs := []point{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+
+		for _, d := range dirs {
+			nx, ny := p.x+d.x, p.y+d.y
+			if nx >= 0 && nx < width && ny >= 0 && ny < height && !isBackground[ny][nx] {
+				if colorsEqual(img.At(nx+bounds.Min.X, ny+bounds.Min.Y), bgColor) {
+					isBackground[ny][nx] = true
+					queue = append(queue, point{nx, ny})
+				}
+			}
+		}
+	}
+
+	// Create result image
+	result := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if isBackground[y-bounds.Min.Y][x-bounds.Min.X] {
+				result.Set(x, y, color.Transparent)
+			} else {
+				result.Set(x, y, img.At(x, y))
+			}
+		}
+	}
+
+	return result
 }

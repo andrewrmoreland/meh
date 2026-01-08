@@ -278,3 +278,188 @@ func TestTrimImage_SinglePixelContent(t *testing.T) {
 		t.Errorf("expected 1x1, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
 }
+
+func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
+	// Create 10x10 image with white background and red center
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+
+	// Fill with white (background)
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	// Red center at (3,3) to (6,6)
+	red := color.RGBA{255, 0, 0, 255}
+	for y := 3; y < 7; y++ {
+		for x := 3; x < 7; x++ {
+			img.Set(x, y, red)
+		}
+	}
+
+	result := makeBackgroundTransparent(img)
+
+	// Check that background pixels are now transparent
+	_, _, _, a := result.At(0, 0).RGBA()
+	if a != 0 {
+		t.Errorf("expected transparent pixel at (0,0), got alpha=%d", a)
+	}
+
+	// Check that content pixels are preserved
+	r, g, b, a := result.At(4, 4).RGBA()
+	if a == 0 {
+		t.Error("expected opaque pixel at (4,4)")
+	}
+	if r>>8 != 255 || g != 0 || b != 0 {
+		t.Errorf("expected red pixel at (4,4), got r=%d g=%d b=%d", r>>8, g>>8, b>>8)
+	}
+}
+
+func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
+	// Create image with white background, red border around interior white
+	// The interior white should NOT become transparent (not connected to edge)
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+
+	// Fill with white (background)
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	// Red ring at (2,2) to (7,7)
+	red := color.RGBA{255, 0, 0, 255}
+	for y := 2; y < 8; y++ {
+		for x := 2; x < 8; x++ {
+			img.Set(x, y, red)
+		}
+	}
+
+	// White center at (4,4) to (5,5) - same color as background but not connected
+	for y := 4; y < 6; y++ {
+		for x := 4; x < 6; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	result := makeBackgroundTransparent(img)
+
+	// Edge background should be transparent
+	_, _, _, a := result.At(0, 0).RGBA()
+	if a != 0 {
+		t.Error("expected edge background to be transparent")
+	}
+
+	// Interior white (surrounded by red) should NOT be transparent
+	_, _, _, a = result.At(4, 4).RGBA()
+	if a == 0 {
+		t.Error("expected interior white pixel to remain opaque (not connected to edge)")
+	}
+
+	// Red ring should remain opaque
+	_, _, _, a = result.At(3, 3).RGBA()
+	if a == 0 {
+		t.Error("expected red pixel to remain opaque")
+	}
+}
+
+func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
+	// Create image with multiple colors
+	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
+
+	// Fill with blue (background - top-left)
+	blue := color.RGBA{0, 0, 255, 255}
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			img.Set(x, y, blue)
+		}
+	}
+
+	// Add green and red pixels
+	img.Set(2, 2, color.RGBA{0, 255, 0, 255}) // green
+	img.Set(3, 3, color.RGBA{255, 0, 0, 255}) // red
+
+	result := makeBackgroundTransparent(img)
+
+	// Blue pixels should be transparent
+	_, _, _, a := result.At(0, 0).RGBA()
+	if a != 0 {
+		t.Error("expected blue background to become transparent")
+	}
+
+	// Green pixel should remain
+	_, g, _, a := result.At(2, 2).RGBA()
+	if a == 0 || g>>8 != 255 {
+		t.Error("expected green pixel to be preserved")
+	}
+
+	// Red pixel should remain
+	r, _, _, a := result.At(3, 3).RGBA()
+	if a == 0 || r>>8 != 255 {
+		t.Error("expected red pixel to be preserved")
+	}
+}
+
+func TestMakeBackgroundTransparent_AlreadyTransparent(t *testing.T) {
+	// Create image with transparent background
+	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
+
+	// Fill with transparent
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			img.Set(x, y, color.RGBA{0, 0, 0, 0})
+		}
+	}
+
+	// Add opaque pixel
+	img.Set(2, 2, color.RGBA{255, 0, 0, 255})
+
+	result := makeBackgroundTransparent(img)
+
+	// Background should remain transparent
+	_, _, _, a := result.At(0, 0).RGBA()
+	if a != 0 {
+		t.Error("expected transparent pixel to remain transparent")
+	}
+
+	// Opaque pixel should remain
+	_, _, _, a = result.At(2, 2).RGBA()
+	if a == 0 {
+		t.Error("expected opaque pixel to remain opaque")
+	}
+}
+
+func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
+	// Create image that's all one color
+	img := image.NewRGBA(image.Rect(0, 0, 5, 5))
+
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	result := makeBackgroundTransparent(img)
+
+	// All pixels should become transparent
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			_, _, _, a := result.At(x, y).RGBA()
+			if a != 0 {
+				t.Errorf("expected all pixels transparent, but (%d,%d) has alpha=%d", x, y, a)
+			}
+		}
+	}
+}
+
+func TestMakeBackgroundTransparent_PreservesDimensions(t *testing.T) {
+	img := createTestImage(100, 50)
+
+	result := makeBackgroundTransparent(img)
+	bounds := result.Bounds()
+
+	if bounds.Dx() != 100 || bounds.Dy() != 50 {
+		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
