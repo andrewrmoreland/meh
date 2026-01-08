@@ -763,16 +763,29 @@
                     </div>
                 </div>
 
-                <!-- Quality -->
-                <div class="form-section" id="qualitySection">
+                <!-- Quality (JPEG) -->
+                <div class="form-section hidden" id="qualitySection">
                     <div class="range-container">
                         <div class="range-header">
-                            <label class="form-label" id="qualityLabel" for="quality">Quality</label>
+                            <label class="form-label" for="quality">Quality</label>
                             <span class="range-value"><span id="qualityValue">90</span>%</span>
                         </div>
                         <input type="range" id="quality" class="range-slider" min="1" max="100" value="90">
                     </div>
-                    <p class="form-hint" id="qualityHint">Higher = better quality, larger file</p>
+                    <p class="form-hint">Higher = better quality, larger file</p>
+                </div>
+
+                <!-- Compression (PNG) -->
+                <div class="form-section" id="compressionSection">
+                    <label class="form-label" for="compression">Compression</label>
+                    <div class="select-wrapper">
+                        <select id="compression">
+                            <option value="75">Best Compression (smallest file, slowest)</option>
+                            <option value="50" selected>Balanced</option>
+                            <option value="25">Fast</option>
+                            <option value="1">No Compression (largest file, fastest)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Options -->
@@ -925,21 +938,21 @@
             dropZone.classList.remove('has-file');
         });
 
-        // Format change - update quality label and transparent option visibility
+        // Format change - toggle quality/compression sections and transparent option
         document.getElementById('format').addEventListener('change', function() {
-            const label = document.getElementById('qualityLabel');
-            const hint = document.getElementById('qualityHint');
+            const qualitySection = document.getElementById('qualitySection');
+            const compressionSection = document.getElementById('compressionSection');
             const transparentRow = document.getElementById('transparentBgRow');
             const transparentCheckbox = document.getElementById('transparentBg');
 
             if (this.value === 'jpeg') {
-                label.textContent = 'Quality';
-                hint.textContent = 'Higher = better quality, larger file';
+                qualitySection.classList.remove('hidden');
+                compressionSection.classList.add('hidden');
                 transparentRow.classList.add('hidden');
                 transparentCheckbox.checked = false;
             } else {
-                label.textContent = 'Speed';
-                hint.textContent = 'Higher = faster encode, larger file (PNG is always lossless)';
+                qualitySection.classList.add('hidden');
+                compressionSection.classList.remove('hidden');
                 transparentRow.classList.remove('hidden');
             }
         });
@@ -976,7 +989,9 @@
                 const height = parseInt(document.getElementById('height').value) || 0;
                 const trim = document.getElementById('trim').checked;
                 const format = document.getElementById('format').value;
-                const quality = parseInt(document.getElementById('quality').value) || 90;
+                const quality = format === 'jpeg'
+                    ? parseInt(document.getElementById('quality').value) || 90
+                    : parseInt(document.getElementById('compression').value) || 50;
                 const transparentBg = document.getElementById('transparentBg').checked;
 
                 const result = processImage(uint8Array, width, height, trim, format, quality, transparentBg);
