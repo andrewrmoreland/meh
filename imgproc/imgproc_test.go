@@ -1,14 +1,9 @@
-package main
+package imgproc
 
 import (
-	"bytes"
 	"image"
 	"image/color"
-	"image/jpeg"
-	"image/png"
 	"testing"
-
-	"golang.org/x/image/draw"
 )
 
 func TestColorsEqual(t *testing.T) {
@@ -28,9 +23,9 @@ func TestColorsEqual(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := colorsEqual(tt.c1, tt.c2)
+			got := ColorsEqual(tt.c1, tt.c2)
 			if got != tt.want {
-				t.Errorf("colorsEqual() = %v, want %v", got, tt.want)
+				t.Errorf("ColorsEqual() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -55,7 +50,7 @@ func TestTrimImage_SolidBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 4 || bounds.Dy() != 4 {
@@ -88,7 +83,7 @@ func TestTrimImage_TransparentBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 6 || bounds.Dy() != 6 {
@@ -107,7 +102,7 @@ func TestTrimImage_NoTrimNeeded(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	// Should remain 5x5 since top-left pixel doesn't match others
@@ -126,106 +121,13 @@ func TestTrimImage_AllSameColor(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	// Edge case: all same color means everything could be trimmed
 	// Current implementation returns original if nothing found
 	if bounds.Dx() != 5 || bounds.Dy() != 5 {
 		t.Errorf("expected 5x5 (no content to keep), got %dx%d", bounds.Dx(), bounds.Dy())
-	}
-}
-
-// createTestImage creates a test image with gradient colors
-func createTestImage(width, height int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			img.Set(x, y, color.RGBA{
-				uint8(x * 255 / width),
-				uint8(y * 255 / height),
-				128,
-				255,
-			})
-		}
-	}
-	return img
-}
-
-func TestJPEGQuality_AffectsFileSize(t *testing.T) {
-	img := createTestImage(100, 100)
-
-	// Encode at low quality
-	var lowQualityBuf bytes.Buffer
-	jpeg.Encode(&lowQualityBuf, img, &jpeg.Options{Quality: 10})
-
-	// Encode at high quality
-	var highQualityBuf bytes.Buffer
-	jpeg.Encode(&highQualityBuf, img, &jpeg.Options{Quality: 95})
-
-	lowSize := lowQualityBuf.Len()
-	highSize := highQualityBuf.Len()
-
-	if highSize <= lowSize {
-		t.Errorf("expected high quality (%d bytes) > low quality (%d bytes)", highSize, lowSize)
-	}
-}
-
-func TestPNGCompression_AffectsFileSize(t *testing.T) {
-	img := createTestImage(100, 100)
-
-	// Encode with no compression
-	var noCompressBuf bytes.Buffer
-	noCompressEncoder := &png.Encoder{CompressionLevel: png.NoCompression}
-	noCompressEncoder.Encode(&noCompressBuf, img)
-
-	// Encode with best compression
-	var bestCompressBuf bytes.Buffer
-	bestCompressEncoder := &png.Encoder{CompressionLevel: png.BestCompression}
-	bestCompressEncoder.Encode(&bestCompressBuf, img)
-
-	noCompressSize := noCompressBuf.Len()
-	bestCompressSize := bestCompressBuf.Len()
-
-	if bestCompressSize >= noCompressSize {
-		t.Errorf("expected best compression (%d bytes) < no compression (%d bytes)", bestCompressSize, noCompressSize)
-	}
-}
-
-func TestResize_MaintainsAspectRatio(t *testing.T) {
-	// Create 200x100 image (2:1 aspect ratio)
-	src := createTestImage(200, 100)
-
-	// Resize to width 100, height should be 50
-	dst := image.NewRGBA(image.Rect(0, 0, 100, 50))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
-
-	bounds := dst.Bounds()
-	if bounds.Dx() != 100 || bounds.Dy() != 50 {
-		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
-	}
-}
-
-func TestResize_Upscale(t *testing.T) {
-	// Create small image
-	src := createTestImage(50, 50)
-
-	// Upscale to 200x200
-	dst := image.NewRGBA(image.Rect(0, 0, 200, 200))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
-
-	bounds := dst.Bounds()
-	if bounds.Dx() != 200 || bounds.Dy() != 200 {
-		t.Errorf("expected 200x200, got %dx%d", bounds.Dx(), bounds.Dy())
-	}
-
-	// Verify it's not empty (check a pixel)
-	r, g, b, a := dst.At(100, 100).RGBA()
-	if a == 0 {
-		t.Error("expected non-transparent pixel in upscaled image")
-	}
-	if r == 0 && g == 0 && b == 0 {
-		t.Error("expected non-black pixel in upscaled image")
 	}
 }
 
@@ -249,7 +151,7 @@ func TestTrimImage_AsymmetricBorder(t *testing.T) {
 		}
 	}
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 10 || bounds.Dy() != 10 {
@@ -271,7 +173,7 @@ func TestTrimImage_SinglePixelContent(t *testing.T) {
 	// Single red pixel at (5,5)
 	img.Set(5, 5, color.RGBA{255, 0, 0, 255})
 
-	result := trimImage(img)
+	result := TrimImage(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 1 || bounds.Dy() != 1 {
@@ -298,7 +200,7 @@ func TestMakeBackgroundTransparent_SolidBackground(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 
 	// Check that background pixels are now transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -343,7 +245,7 @@ func TestMakeBackgroundTransparent_InteriorColorPreserved(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 
 	// Edge background should be transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -380,7 +282,7 @@ func TestMakeBackgroundTransparent_PreservesNonBackground(t *testing.T) {
 	img.Set(2, 2, color.RGBA{0, 255, 0, 255}) // green
 	img.Set(3, 3, color.RGBA{255, 0, 0, 255}) // red
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 
 	// Blue pixels should be transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -415,7 +317,7 @@ func TestMakeBackgroundTransparent_AlreadyTransparent(t *testing.T) {
 	// Add opaque pixel
 	img.Set(2, 2, color.RGBA{255, 0, 0, 255})
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 
 	// Background should remain transparent
 	_, _, _, a := result.At(0, 0).RGBA()
@@ -440,7 +342,7 @@ func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
 		}
 	}
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 
 	// All pixels should become transparent
 	for y := 0; y < 5; y++ {
@@ -456,10 +358,26 @@ func TestMakeBackgroundTransparent_AllSameColor(t *testing.T) {
 func TestMakeBackgroundTransparent_PreservesDimensions(t *testing.T) {
 	img := createTestImage(100, 50)
 
-	result := makeBackgroundTransparent(img)
+	result := MakeBackgroundTransparent(img)
 	bounds := result.Bounds()
 
 	if bounds.Dx() != 100 || bounds.Dy() != 50 {
 		t.Errorf("expected 100x50, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
+}
+
+// createTestImage creates a test image with gradient colors
+func createTestImage(width, height int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				uint8(x * 255 / width),
+				uint8(y * 255 / height),
+				128,
+				255,
+			})
+		}
+	}
+	return img
 }

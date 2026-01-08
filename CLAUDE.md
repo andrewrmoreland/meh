@@ -1,33 +1,30 @@
 # CLAUDE.md - AI Assistant Guide for Image Resizer
 
-This document provides comprehensive guidance for AI assistants working with this codebase.
+This document provides guidance for AI assistants working with this codebase.
 
 ## Project Overview
 
-**Project:** Image Resizer
-**Language:** Go 1.25
-**Type:** Image processing application with dual deployment modes
-**Purpose:** Provides image resizing, trimming, and background transparency manipulation capabilities
-
-The project offers two implementations:
-- **Server-side**: HTTP web server for image processing (port 8080)
-- **Client-side**: WebAssembly (WASM) for browser-based processing
+**Project:** Image Resizer (WASM)
+**Language:** Go 1.24
+**Type:** Browser-based image processing via WebAssembly
+**Purpose:** Provides image resizing, trimming, and background transparency manipulation in the browser
 
 ## Directory Structure
 
 ```
 /
-├── main.go                    # HTTP server implementation
-├── main_test.go               # Server-side tests
+├── imgproc/
+│   ├── imgproc.go            # Shared image processing functions
+│   └── imgproc_test.go       # Tests for image processing
 ├── wasm/
-│   ├── main.go               # WASM implementation
-│   ├── index.html            # WASM web interface
+│   ├── main.go               # WASM entry point
+│   ├── index.html            # Web interface
 │   └── wasm_exec.js          # Go WASM runtime (generated)
 ├── build-wasm.sh             # Build script for WASM
-├── .github/workflows/ci.yml   # GitHub Actions CI/CD
-├── go.mod                     # Module definition
-├── go.sum                     # Dependency checksums
-└── .gitignore                # Ignores: image-resizer binary, wasm/main.wasm
+├── .github/workflows/ci.yml  # GitHub Actions CI/CD
+├── go.mod                    # Module definition
+├── go.sum                    # Dependency checksums
+└── .gitignore                # Ignores: wasm/main.wasm
 ```
 
 ## Quick Commands
@@ -35,12 +32,6 @@ The project offers two implementations:
 ```bash
 # Run tests
 go test -v ./...
-
-# Build server binary
-go build
-
-# Run server (after building)
-./image-resizer
 
 # Build WASM
 ./build-wasm.sh
@@ -51,31 +42,17 @@ cd wasm && python3 -m http.server 8080
 
 ## Key Source Files
 
-### `main.go` - HTTP Server
+### `imgproc/imgproc.go` - Shared Image Processing
 
-Main server implementation with:
-- **Routes:**
-  - `GET /` - Serves HTML form UI
-  - `POST /resize` - Processes uploaded images
+Contains the core image processing functions:
 
-- **Form Parameters:**
-  - `image` (file) - Input image (PNG, JPEG, WebP)
-  - `width` (int) - Target width (optional)
-  - `height` (int) - Target height (optional)
-  - `format` (string) - Output format: "png" or "jpeg"
-  - `trim` (checkbox) - Enable border trimming
-  - `transparentBg` (checkbox) - Make background transparent
+- **`TrimImage(img)`** - Removes borders (transparent or solid color)
+- **`MakeBackgroundTransparent(img)`** - Flood-fill algorithm for background removal
+- **`ColorsEqual(c1, c2)`** - Color comparison utility
 
-- **Key Functions:**
-  - `resizeHandler()` - Main HTTP request handler
-  - `trimImage()` - Removes borders (transparent or solid color)
-  - `makeBackgroundTransparent()` - Flood-fill algorithm for background removal
-  - `colorsEqual()` - Color comparison utility
-
-### `wasm/main.go` - WASM Implementation
+### `wasm/main.go` - WASM Entry Point
 
 Browser-based implementation with:
-- Same image processing logic as server
 - JavaScript-callable via `processImage()` function
 - Build tag: `//go:build js && wasm`
 
@@ -119,21 +96,17 @@ Uses CatmullRom interpolation via `golang.org/x/image/draw` for high-quality res
 
 ## Testing
 
-**Test file:** `main_test.go`
+**Test file:** `imgproc/imgproc_test.go`
 
 **Test organization:**
 - `TestColorsEqual` - Color comparison (6 test cases)
-- `TestTrimImage_*` - Border trimming (5 test functions)
+- `TestTrimImage_*` - Border trimming (7 test functions)
 - `TestMakeBackgroundTransparent_*` - Transparency function (6 test functions)
-- `TestJPEGQuality_AffectsFileSize` - Compression validation
-- `TestPNGCompression_AffectsFileSize` - PNG encoding levels
-- `TestResize_*` - Resizing and aspect ratio (2 test functions)
 
 **Testing patterns:**
 - Table-driven tests for multiple cases
 - `createTestImage()` for fixture generation
 - Pixel verification via direct sampling
-- File size assertions for compression tests
 
 ## Dependencies
 
@@ -158,11 +131,10 @@ GitHub Actions workflow (`.github/workflows/ci.yml`):
 ## Code Conventions
 
 ### Naming
-- **Functions:** CamelCase (`trimImage`, `makeBackgroundTransparent`)
-- **Variables:** camelCase with descriptive names (`shouldTrim`, `newWidth`)
+- **Exported Functions:** PascalCase (`TrimImage`, `MakeBackgroundTransparent`)
+- **Internal variables:** camelCase with descriptive names
 
 ### Error Handling
-- HTTP: Descriptive error messages returned to client
 - WASM: Errors wrapped in return map: `{"error": "message"}`
 - Early returns with descriptive error messages
 
@@ -180,23 +152,17 @@ GitHub Actions workflow (`.github/workflows/ci.yml`):
 ## Known Limitations
 
 - Transparent background uses top-left pixel as reference color only
-- Maximum upload size: 10MB (hard-coded)
 - Single-threaded processing
-- JPEG output quality fixed at 90% (server-side)
 
 ## Development Notes
 
-When making changes:
+1. **Run tests before committing** - `go test -v ./...`
 
-1. **Keep implementations in sync** - Both `main.go` and `wasm/main.go` share image processing logic. Changes to algorithms should be reflected in both.
+2. **Test WASM locally** - Build with `./build-wasm.sh` and serve locally to verify browser behavior.
 
-2. **Run tests before committing** - `go test -v ./...`
+3. **Add tests for new features** - Follow existing patterns in `imgproc/imgproc_test.go`.
 
-3. **Test WASM locally** - Build with `./build-wasm.sh` and serve locally to verify browser behavior.
-
-4. **Add tests for new features** - Follow existing patterns in `main_test.go`.
-
-5. **Edge cases to consider:**
+4. **Edge cases to consider:**
    - Single-pixel images
    - All-same-color images
    - Asymmetric borders
