@@ -52,6 +52,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
             <label><input type="checkbox" name="trim" value="1"> Trim borders (transparent or solid color)</label>
         </p>
         <p>
+            <label><input type="checkbox" name="transparentBg" value="1"> Make background transparent (uses top-left pixel color, PNG only)</label>
+        </p>
+        <p>
             <button type="submit">Resize</button>
         </p>
     </form>
@@ -93,6 +96,11 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 	// Apply trim if requested
 	if r.FormValue("trim") == "1" {
 		img = trimImage(img)
+	}
+
+	// Make background transparent if requested
+	if r.FormValue("transparentBg") == "1" {
+		img = makeBackgroundTransparent(img)
 	}
 
 	// Get dimensions
@@ -242,4 +250,26 @@ func colorsEqual(c1, c2 color.Color) bool {
 	r1, g1, b1, a1 := c1.RGBA()
 	r2, g2, b2, a2 := c2.RGBA()
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
+}
+
+// makeBackgroundTransparent replaces pixels matching the top-left corner color with transparent pixels
+func makeBackgroundTransparent(img image.Image) image.Image {
+	bounds := img.Bounds()
+	bgColor := img.At(bounds.Min.X, bounds.Min.Y)
+
+	// Create a new RGBA image
+	result := image.NewRGBA(bounds)
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			c := img.At(x, y)
+			if colorsEqual(c, bgColor) {
+				result.Set(x, y, color.Transparent)
+			} else {
+				result.Set(x, y, c)
+			}
+		}
+	}
+
+	return result
 }

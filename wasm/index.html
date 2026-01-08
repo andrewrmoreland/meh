@@ -44,6 +44,9 @@
         <p>
             <label><input type="checkbox" id="trim"> Trim borders (transparent or solid color)</label>
         </p>
+        <p id="transparentBgRow">
+            <label><input type="checkbox" id="transparentBg"> Make background transparent (uses top-left pixel color)</label>
+        </p>
         <p>
             <button type="submit" id="submit" disabled>Resize</button>
         </p>
@@ -95,6 +98,22 @@
         document.getElementById("format").addEventListener("change", updateQualityLabel);
         updateQualityLabel();
 
+        // Hide transparent background option when JPEG is selected (JPEG doesn't support transparency)
+        function updateTransparentBgVisibility() {
+            const format = document.getElementById("format").value;
+            const row = document.getElementById("transparentBgRow");
+            const checkbox = document.getElementById("transparentBg");
+            if (format === "jpeg") {
+                row.style.display = "none";
+                checkbox.checked = false;
+            } else {
+                row.style.display = "";
+            }
+        }
+
+        document.getElementById("format").addEventListener("change", updateTransparentBgVisibility);
+        updateTransparentBgVisibility();
+
         // Update quality value display
         document.getElementById("quality").addEventListener("input", (e) => {
             document.getElementById("qualityValue").textContent = e.target.value;
@@ -137,9 +156,10 @@
                 const trim = document.getElementById("trim").checked;
                 const format = document.getElementById("format").value;
                 const quality = parseInt(document.getElementById("quality").value) || 90;
+                const transparentBg = document.getElementById("transparentBg").checked;
 
                 // Call WASM function
-                const result = processImage(uint8Array, width, height, trim, format, quality);
+                const result = processImage(uint8Array, width, height, trim, format, quality, transparentBg);
 
                 if (result.error) {
                     throw new Error(result.error);

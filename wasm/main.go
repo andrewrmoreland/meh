@@ -23,7 +23,7 @@ func main() {
 }
 
 // processImage is called from JavaScript with image data and options
-// Args: imageData (Uint8Array), width (int), height (int), trim (bool), format (string), quality (int)
+// Args: imageData (Uint8Array), width (int), height (int), trim (bool), format (string), quality (int), transparentBg (bool)
 // Returns: processed image as Uint8Array
 func processImage(this js.Value, args []js.Value) interface{} {
 	if len(args) < 6 {
@@ -44,6 +44,10 @@ func processImage(this js.Value, args []js.Value) interface{} {
 	if quality <= 0 || quality > 100 {
 		quality = 90
 	}
+	transparentBg := false
+	if len(args) >= 7 {
+		transparentBg = args[6].Bool()
+	}
 
 	// Decode the image
 	img, _, err := image.Decode(bytes.NewReader(imageData))
@@ -54,6 +58,11 @@ func processImage(this js.Value, args []js.Value) interface{} {
 	// Apply trim if requested
 	if trim {
 		img = trimImage(img)
+	}
+
+	// Make background transparent if requested
+	if transparentBg {
+		img = makeBackgroundTransparent(img)
 	}
 
 	// Calculate new dimensions
@@ -221,4 +230,26 @@ func colorsEqual(c1, c2 color.Color) bool {
 	r1, g1, b1, a1 := c1.RGBA()
 	r2, g2, b2, a2 := c2.RGBA()
 	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
+}
+
+// makeBackgroundTransparent replaces pixels matching the top-left corner color with transparent pixels
+func makeBackgroundTransparent(img image.Image) image.Image {
+	bounds := img.Bounds()
+	bgColor := img.At(bounds.Min.X, bounds.Min.Y)
+
+	// Create a new RGBA image
+	result := image.NewRGBA(bounds)
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			c := img.At(x, y)
+			if colorsEqual(c, bgColor) {
+				result.Set(x, y, color.Transparent)
+			} else {
+				result.Set(x, y, c)
+			}
+		}
+	}
+
+	return result
 }
